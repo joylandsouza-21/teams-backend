@@ -21,9 +21,9 @@ module.exports = {
     }
   },
 
-  async loginUser(req, res){
-    try{
-      const result = UserService.loginUser(req.body)
+  async loginUser(req, res) {
+    try {
+      const result = await UserService.loginUser(req.body)
       return res.json({
         message: "Login successful",
         ...result

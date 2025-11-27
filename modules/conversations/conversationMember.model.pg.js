@@ -4,10 +4,16 @@ const User = require("../users/user.model.pg");
 const Conversation = require("./conversation.model.pg");
 
 const ConversationMember = sequelize.define("conversation_members", {
-  id: {
+  id: { type: DataTypes.BIGINT, autoIncrement: true, primaryKey: true },
+
+  userId: {
     type: DataTypes.BIGINT,
-    autoIncrement: true,
-    primaryKey: true,
+    allowNull: false,
+  },
+
+  conversationId: {
+    type: DataTypes.BIGINT,
+    allowNull: false,
   },
 
   role: {
@@ -15,18 +21,9 @@ const ConversationMember = sequelize.define("conversation_members", {
     defaultValue: "member",
   },
 
-}, {
-  timestamps: true,
-});
+}, { timestamps: true });
 
-Conversation.belongsToMany(User, {
-  through: ConversationMember,
-  foreignKey: "conversationId",
-});
-
-User.belongsToMany(Conversation, {
-  through: ConversationMember,
-  foreignKey: "userId",
-});
+ConversationMember.belongsTo(User, { foreignKey: "userId" });
+ConversationMember.belongsTo(Conversation, { foreignKey: "conversationId" });
 
 module.exports = ConversationMember;

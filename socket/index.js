@@ -4,6 +4,8 @@ const chatSocket = require("./chat.socket");
 const socketAuth = require("../middleware/socketAuth.middleware");
 const socketRateLimit = require("../middleware/socketRateLimit");
 
+let ioInstance;
+
 module.exports = function (server) {
   const io = new Server(server, {
     cors: {
@@ -12,6 +14,8 @@ module.exports = function (server) {
       credentials: true
     }
   });
+
+  ioInstance = io;
 
   // 1. Add socket authentication
   io.use(socketAuth);
@@ -35,3 +39,6 @@ module.exports = function (server) {
 
   return io;
 };
+
+// ✅ Export getter for REST APIs
+module.exports.getIO = () => ioInstance;

@@ -10,8 +10,8 @@ app.use(express.json());
 
 // routes
 app.use("/api/auth", require("./modules/users/user.routes"));
-// app.use("/api/messages", require("./modules/messages/message.routes"));
-// app.use("/api/conversations", require("./modules/conversations/conversation.routes"));
+app.use("/api/messages", require("./modules/messages/message.routes"));
+app.use("/api/conversations", require("./modules/conversations/conversation.routes"));
 
 // app.get("/", (req, res) => res.send("Chat Backend Running"));
 
