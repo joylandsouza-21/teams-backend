@@ -5,8 +5,9 @@ module.exports = {
 
     async createOrGetDirect(req, res) {
         try {
-            const user1Id = req.user.id;        // logged-in user
-            const { userId: user2Id } = req.body; // target user
+            const user1Id = req.user.id;
+
+            const { userId: user2Id } = req.body;
 
             if (user1Id === user2Id) {
                 return res.status(400).json({ error: "Cannot create chat with yourself" });
@@ -86,8 +87,8 @@ module.exports = {
 
             members.forEach((userId) => {
                 io.to(`conversation:${conversationId}`).emit("member_added", {
-                userId,
-                conversationId,
+                    userId,
+                    conversationId,
                 });
             });
 
@@ -140,6 +141,32 @@ module.exports = {
             return res.status(400).json({ error: err.message });
         }
     },
+
+    async getAllConversations(req, res) {
+        try {
+            const creatorId = req.user.id;
+            const result = await ConversationService.getAllConversations(creatorId)
+            return res.json(result);
+        } catch (err) {
+            return res.status(400).json({ error: err.message });
+        }
+    },
+
+    async updateConversation(req, res) {
+        try {
+            const { conversationId } = req.params;
+            const { name } = req.body;
+            const result = await ConversationService.updateConversationService({ conversationId, name})
+
+            return res.status(200).json({
+                message: "Conversation updated successfully",
+                data: result
+            });
+            
+        } catch (err) {
+            return res.status(400).json({ error: err.message });
+        }
+    }
 
 
 };

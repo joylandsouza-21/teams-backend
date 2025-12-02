@@ -137,45 +137,45 @@ module.exports = function (io, socket) {
     });
   });
 
-  socket.on("add_member", async ({ conversationId, userId }) => {
-    const adminId = socket.user.id;
+  // socket.on("add_member", async ({ conversationId, userId }) => {
+  //   const adminId = socket.user.id;
 
-    // 1️⃣ Update DB
-    await conversationService.addMembers({
-      conversationId,
-      members: [userId],
-      userId: adminId,
-    });
+  //   // 1️⃣ Update DB
+  //   await conversationService.addMembers({
+  //     conversationId,
+  //     members: [userId],
+  //     userId: adminId,
+  //   });
 
-    // 2️⃣ Emit realtime update ✅
-    io.to(`conversation:${conversationId}`).emit("member_added", { userId });
-  });
-
-
-  socket.on("remove_member", async ({ conversationId, userId }) => {
-    const adminId = socket.user.id;
-
-    await ConversationService.removeMember({
-      conversationId,
-      userId,
-      adminId,
-    });
-
-    io.to(`conversation:${conversationId}`).emit("member_removed", { userId });
-  });
+  //   // 2️⃣ Emit realtime update ✅
+  //   io.to(`conversation:${conversationId}`).emit("member_added", { userId });
+  // });
 
 
-  socket.on("convert_to_group", async ({ conversationId, name, newMembers }) => {
-    const adminId = socket.user.id;
+  // socket.on("remove_member", async ({ conversationId, userId }) => {
+  //   const adminId = socket.user.id;
 
-    await ConversationService.convertDirectToGroup({
-      conversationId,
-      userId: adminId,
-      name,
-      newMembers,
-    });
+  //   await ConversationService.removeMember({
+  //     conversationId,
+  //     userId,
+  //     adminId,
+  //   });
 
-    io.to(`conversation:${conversationId}`).emit("group_converted", { conversationId });
-  });
+  //   io.to(`conversation:${conversationId}`).emit("member_removed", { userId });
+  // });
+
+
+  // socket.on("convert_to_group", async ({ conversationId, name, newMembers }) => {
+  //   const adminId = socket.user.id;
+
+  //   await ConversationService.convertDirectToGroup({
+  //     conversationId,
+  //     userId: adminId,
+  //     name,
+  //     newMembers,
+  //   });
+
+  //   io.to(`conversation:${conversationId}`).emit("group_converted", { conversationId });
+  // });
 
 };

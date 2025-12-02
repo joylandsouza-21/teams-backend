@@ -10,7 +10,14 @@ const {
     convertToGroupSchema,
     addMembersSchema,
     removeMemberParamsSchema,
+    updateConversationSchema,
 } = require("./conversation.schema");
+
+router.get(
+    "/",
+    auth,
+    ConversationController.getAllConversations
+)
 
 router.post(
     "/direct",
@@ -52,6 +59,13 @@ router.delete(
     auth,
     validate(removeMemberParamsSchema, "params"),
     ConversationController.removeMember
+);
+
+router.post(
+    "/:conversationId/update",
+    auth,
+    validate(updateConversationSchema),
+    ConversationController.updateConversation
 );
 
 module.exports = router;

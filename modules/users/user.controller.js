@@ -8,15 +8,6 @@ module.exports = {
       const user = await UserService.createUser(req.body);
       return res.status(201).json(user);
     } catch (err) {
-      // Zod validation error
-      if (err instanceof ZodError) {
-        const flat = err.flatten();
-
-        return res.status(400).json({
-          errors: flat.fieldErrors
-        });
-      }
-
       return res.status(400).json({ error: err.message });
     }
   },
@@ -30,11 +21,15 @@ module.exports = {
       });
 
     } catch (err) {
-      // Zod validation error
-      if (err.errors) {
-        return res.status(400).json({ error: err.errors });
-      }
+      return res.status(400).json({ error: err.message });
+    }
+  },
 
+  async getAllUsers(req, res){
+    try{
+      const result = await UserService.getAllUsers()
+      return res.json(result);
+    } catch (err) {
       return res.status(400).json({ error: err.message });
     }
   }

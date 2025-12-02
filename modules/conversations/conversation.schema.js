@@ -11,8 +11,9 @@ const createDirectConversationSchema = z.object({
 
 const createGroupConversationSchema = z.object({
     name: z.string()
-        .min(1, "Group name is required")
-        .max(100, "Group name too long"),
+        .max(100, "Group name too long")
+        .optional()
+        .or(z.literal("")),
 
     members: z.array(
         z.coerce.number().int().positive("Member userId must be positive")
@@ -28,7 +29,9 @@ const createChannelConversationSchema = z.object({
 
 const convertToGroupSchema = z.object({
     name: z.string()
-        .min(1, "Group name is required"),
+        .min(1, "Group name is required")
+        .optional()
+        .or(z.literal("")),
 
     newMembers: z.array(
         z.coerce.number().int().positive("Member userId must be positive")
@@ -48,6 +51,14 @@ const removeMemberParamsSchema = z.object({
     userId: z.coerce.number().int().positive(),
 });
 
+const updateConversationSchema = z.object({
+    name: z.string()
+        .optional()
+        .refine(val => val === undefined || val.length > 0, {
+            message: "Name cannot be empty"
+        }),
+});
+
 module.exports = {
     createDirectConversationSchema,
     createGroupConversationSchema,
@@ -55,4 +66,5 @@ module.exports = {
     convertToGroupSchema,
     addMembersSchema,
     removeMemberParamsSchema,
+    updateConversationSchema
 };

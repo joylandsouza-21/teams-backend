@@ -57,4 +57,11 @@ module.exports = {
     };
   },
 
+  async getAllUsers() {
+    return await User.findAll({
+      attributes: ["id", "name", "email", "role", "profile_pic"],
+      order: [["name", "ASC"]],
+    });
+  }
+
 };

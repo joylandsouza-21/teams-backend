@@ -23,7 +23,4 @@ const ConversationMember = sequelize.define("conversation_members", {
 
 }, { timestamps: true });
 
-ConversationMember.belongsTo(User, { foreignKey: "userId" });
-ConversationMember.belongsTo(Conversation, { foreignKey: "conversationId" });
-
 module.exports = ConversationMember;

@@ -43,9 +43,17 @@ const User = sequelize.define("users", {
     defaultValue: "user",
   },
 
+  profile_pic: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    validate: {
+      isUrl: true,
+    }
+  },
+
 }, {
-  timestamps: true,       
-  paranoid: true,     
+  timestamps: true,
+  paranoid: true,
   tableName: "users",
 });
 

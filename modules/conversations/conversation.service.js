@@ -1,20 +1,23 @@
+const sequelize = require("../../config/postgres");
+const User = require("../users/user.model.pg");
 const Conversation = require("./conversation.model.pg");
 const ConversationMember = require("./conversationMember.model.pg");
 const { Op } = require("sequelize");
 
 module.exports = {
 
-    // ==========================================
-    // CREATE OR GET DIRECT CONVERSATION (DM)
-    // ==========================================
     async createOrFindDirect(user1Id, user2Id) {
 
         // 1️⃣ Find if a direct conversation already exists between these two users
         const existing = await Conversation.findOne({
             where: { type: "direct" },
+            subQuery: false,
             include: [
                 {
                     model: ConversationMember,
+                    as: "members",
+                    attributes: [],
+                    required: true,
                     where: {
                         userId: {
                             [Op.in]: [user1Id, user2Id]
@@ -23,7 +26,10 @@ module.exports = {
                 }
             ],
             group: ["conversations.id"],
-            having: sequelize.literal(`COUNT(conversation_members.userId) = 2`)
+            having: sequelize.where(
+                sequelize.fn("COUNT", sequelize.col("members.userId")),
+                2
+            )
         });
 
         if (existing) {
@@ -52,9 +58,6 @@ module.exports = {
         return conversation;
     },
 
-    // ======================================================
-    // GROUP CHAT (private multi-user)
-    // ======================================================
     async createGroupConversation({ creatorId, name, members }) {
 
         // Remove duplicates + ensure creator is included
@@ -137,10 +140,6 @@ module.exports = {
         return true;
     },
 
-
-    // ======================================================
-    // CHANNEL CHAT (public / team-based)
-    // ======================================================
     async createChannelConversation({ creatorId, name }) {
 
         const conversation = await Conversation.create({
@@ -158,16 +157,89 @@ module.exports = {
         return conversation;
     },
 
-
-    // ==========================================
-    // CHECK IF USER IS MEMBER (used by socket)
-    // ==========================================
     async isMember(userId, conversationId) {
         const member = await ConversationMember.findOne({
             where: { userId, conversationId }
         });
 
         return !!member;
+    },
+
+    async getAllConversations(userId) {
+
+        // ✅ 1️⃣ Get only conversations where this user is a member
+        const conversations = await Conversation.findAll({
+            subQuery: false,
+            attributes: ["id", "type", "name"],
+            include: [
+                {
+                    model: ConversationMember,
+                    as: "members",
+                    attributes: [],
+                    required: true,
+                    where: { userId }
+                }
+            ],
+            order: [["createdAt", "DESC"]]
+        });
+
+        if (!conversations.length) return [];
+
+        const conversationIds = conversations.map(c => c.id);
+
+        // ✅ 2️⃣ Load ALL members + their user data (INCLUDING current user)
+        const members = await ConversationMember.findAll({
+            where: {
+                conversationId: {
+                    [Op.in]: conversationIds
+                }
+            },
+            include: [
+                {
+                    model: User,
+                    as: "user",
+                    attributes: ["id", "name", "email", "profile_pic"]
+                }
+            ]
+        });
+
+        // ✅ 3️⃣ Convert members → users[] per conversation
+        const conversationMap = {};
+
+        conversations.forEach(c => {
+            conversationMap[c.id] = {
+                ...c.toJSON(),
+                members: []
+            };
+
+        });
+
+        members.forEach(m => {
+            if (conversationMap[m.conversationId] && m.user) {
+                conversationMap[m.conversationId].members.push(m.user);
+            }
+        });
+
+        return conversations.map(c => conversationMap[c.id]);
+    },
+
+    async updateConversationService({ conversationId, name }) {
+        const conversation = await Conversation.findOne({
+            where: { id: conversationId }
+        })
+
+        if (!conversation) throw new Error("No conversation found!")
+
+        // Avoid useless DB update
+        if (conversation.name === name) {
+            return conversation;
+        }
+
+        // Update and return updated record
+        await conversation.update({ name });
+
+        return conversation;
+
     }
 
 };
