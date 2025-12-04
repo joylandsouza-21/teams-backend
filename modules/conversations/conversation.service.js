@@ -2,7 +2,10 @@ const sequelize = require("../../config/postgres");
 const User = require("../users/user.model.pg");
 const Conversation = require("./conversation.model.pg");
 const ConversationMember = require("./conversationMember.model.pg");
+const Message = require("../messages/message.model.mongo");
+
 const { Op } = require("sequelize");
+const ConversationRead = require("./conversationRead.model.pg");
 
 module.exports = {
 
@@ -167,10 +170,10 @@ module.exports = {
 
     async getAllConversations(userId) {
 
-        // ✅ 1️⃣ Get only conversations where this user is a member
+        //  Get user's conversations
         const conversations = await Conversation.findAll({
             subQuery: false,
-            attributes: ["id", "type", "name"],
+            attributes: ["id", "type", "name", "createdAt"],
             include: [
                 {
                     model: ConversationMember,
@@ -185,9 +188,9 @@ module.exports = {
 
         if (!conversations.length) return [];
 
-        const conversationIds = conversations.map(c => c.id);
+        const conversationIds = conversations.map(c => String(c.id));
 
-        // ✅ 2️⃣ Load ALL members + their user data (INCLUDING current user)
+        // Load ALL members with user data
         const members = await ConversationMember.findAll({
             where: {
                 conversationId: {
@@ -203,15 +206,65 @@ module.exports = {
             ]
         });
 
-        // ✅ 3️⃣ Convert members → users[] per conversation
+        // Load last read message per conversation (Postgres)
+        const reads = await ConversationRead.findAll({
+            where: {
+                userId,
+                conversationId: {
+                    [Op.in]: conversationIds
+                }
+            }
+        });
+
+        const readMap = {};
+        reads.forEach(r => {
+            readMap[String(r.conversationId)] = r.lastMessageId;
+        });
+
+        // ✅ 4️⃣ 🔥 SINGLE MONGO AGGREGATION FOR UNREAD COUNTS
+        const unreadAggregation = await Message.aggregate([
+            {
+                $match: {
+                    conversationId: { $in: conversationIds }
+                }
+            },
+            {
+                $group: {
+                    _id: "$conversationId",
+                    lastMessageId: { $max: "$_id" },
+                    totalMessages: { $sum: 1 }
+                }
+            }
+        ]);
+
+        // Count unread per conversation using readMap
+        const unreadMap = {};
+
+        for (const convo of unreadAggregation) {
+            const conversationId = convo._id;
+            const lastReadMessageId = readMap[conversationId];
+
+            if (!lastReadMessageId) {
+                // ✅ All messages are unread
+                unreadMap[conversationId] = convo.totalMessages;
+            } else {
+                // ✅ Count only those AFTER last read
+                unreadMap[conversationId] = await Message.countDocuments({
+                    conversationId,
+                    _id: { $gt: lastReadMessageId }
+                });
+            }
+        }
+
+        // ✅ 6️⃣ Build conversation map
         const conversationMap = {};
 
         conversations.forEach(c => {
             conversationMap[c.id] = {
                 ...c.toJSON(),
-                members: []
+                members: [],
+                unreadCount: unreadMap[String(c.id)] || 0
             };
-
         });
 
         members.forEach(m => {
@@ -221,7 +274,8 @@ module.exports = {
         });
 
         return conversations.map(c => conversationMap[c.id]);
-    },
+    }
+    ,
 
     async updateConversationService({ conversationId, name }) {
         const conversation = await Conversation.findOne({
@@ -240,6 +294,33 @@ module.exports = {
 
         return conversation;
 
+    },
+
+    async getConversationMembers(conversationId) {
+        if (!conversationId) {
+            throw new Error("Conversation ID is required");
+        }
+
+        const members = await ConversationMember.findAll({
+            where: { conversationId },
+            include: [
+                {
+                    model: User,
+                    as: "user",
+                    attributes: ["id", "name", "email", "profile_pic"],
+                },
+            ],
+            attributes: ["id", "role", "createdAt"],
+        });
+
+        return members.map((m) => ({
+            id: m.user.id,
+            name: m.user.name,
+            email: m.user.email,
+            profilePic: m.user.profile_pic,
+            role: m.role,
+            joinedAt: m.createdAt,
+        }));
     }
 
 };

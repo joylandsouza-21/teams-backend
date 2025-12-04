@@ -4,10 +4,17 @@ const connectMongo = require("./config/mongo");
 const sequelize = require("./config/postgres");
 const socketSetup = require("./socket");
 
+
 const server = http.createServer(app);
 
 // attach socket
-const io = socketSetup(server);
+let io;
+try {
+  io = socketSetup(server);
+  console.log("✅ Socket initialized");
+} catch (err) {
+  console.error("🔥 SOCKET SETUP CRASHED:", err);
+}
 
 const PORT = process.env.PORT || 9080;
 
@@ -19,9 +26,6 @@ const PORT = process.env.PORT || 9080;
     // PostgreSQL authenticate
     await sequelize.authenticate();
     console.log("✓ PostgreSQL Connected");
-
-    // Sync models
-    await sequelize.sync();
 
     // Start server
     server.listen(PORT, () =>

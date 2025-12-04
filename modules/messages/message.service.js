@@ -14,12 +14,20 @@ module.exports = {
     }
 
     const messages = await Message.find(filter)
-      .sort({ _id: -1 }) // newest first
-      .limit(Number(limit))
+      .sort({ _id: -1 })          // newest first
+      .limit(limit + 1)          // ✅ fetch extra 1
       .lean();
 
-    // return oldest → newest
-    return messages.reverse();
+    const hasMore = messages.length > limit;
+
+    if (hasMore) {
+      messages.pop();
+    }
+
+    return {
+      messages: messages.reverse(),
+      hasMore
+    };
   },
 
 
@@ -49,12 +57,12 @@ module.exports = {
     const msg = await Message.findOneAndUpdate(
       { _id: messageId, senderId: userId },   // permission check
       { content, edited: true },
-      { new: true }
+      { new: true, lean: true }
     );
 
     if (!msg) throw new Error("Message not found or not allowed");
 
-    return msg.toObject();
+    return msg;
   },
 
 
@@ -89,21 +97,26 @@ module.exports = {
     }
 
     const users = msg.reactions.get(emoji);
-
     const index = users.indexOf(userId);
 
     if (index >= 0) {
-      users.splice(index, 1);   // remove reaction
+      users.splice(index, 1);   // ✅ remove reaction
     } else {
-      users.push(userId);       // add reaction
+      users.push(userId);      // ✅ add reaction
     }
 
     msg.markModified("reactions");
     await msg.save();
 
-    return msg.toObject();
-  },
+    const plain = msg.toObject();
 
+    // ✅ ✅ ✅ FORCE MAP TO OBJECT (CRITICAL)
+    plain.reactions = Object.fromEntries(
+      [...msg.reactions.entries()]
+    );
+
+    return plain;
+  },
 
 
   // ======================================

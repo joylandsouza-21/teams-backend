@@ -15,6 +15,15 @@ module.exports = {
 
             const conversation = await ConversationService.createOrFindDirect(user1Id, user2Id);
 
+            const io = getIO();
+            io.to(`user:${user1Id}`).emit("refresh_chat", {
+                conversationId: conversation.id,
+            });
+
+            io.to(`user:${user2Id}`).emit("refresh_chat", {
+                conversationId: conversation.id,
+            });
+
             return res.json({
                 conversationId: conversation.id
             });
@@ -37,6 +46,14 @@ module.exports = {
                 name,
                 members,
             });
+
+            const io = getIO();
+
+            for (const userId of members) {
+                io.to(`user:${userId}`).emit("refresh_chat", {
+                    conversationId: conversation.id,
+                });
+            }
 
             return res.json({
                 conversationId: conversation.id
@@ -113,6 +130,7 @@ module.exports = {
             const io = getIO();
             io.to(`conversation:${conversationId}`).emit("member_removed", { userId });
 
+
             res.json({ success: true });
 
         } catch (err) {
@@ -156,13 +174,22 @@ module.exports = {
         try {
             const { conversationId } = req.params;
             const { name } = req.body;
-            const result = await ConversationService.updateConversationService({ conversationId, name})
+            const result = await ConversationService.updateConversationService({ conversationId, name })
+
+            const members = await ConversationService.getConversationMembers(conversationId)
+
+            const userRooms = members.map(m => `user:${m.id}`);
+            
+            const io = getIO();
+            io.to(userRooms).emit("refresh_chat", {
+                conversationId: conversationId,
+            });
 
             return res.status(200).json({
                 message: "Conversation updated successfully",
                 data: result
             });
-            
+
         } catch (err) {
             return res.status(400).json({ error: err.message });
         }

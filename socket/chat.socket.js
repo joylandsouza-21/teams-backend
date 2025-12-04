@@ -1,13 +1,9 @@
 const sanitize = require("../utils/sanitize");
 const MessageService = require("../modules/messages/message.service");
 const ConversationService = require("../modules/conversations/conversation.service");
-const conversationService = require("../modules/conversations/conversation.service");
 
 module.exports = function (io, socket) {
 
-  // ============================
-  // JOIN CONVERSATION
-  // ============================
   socket.on("join_conversation", async ({ conversationId }) => {
     const userId = socket.user.id;
 
@@ -18,11 +14,6 @@ module.exports = function (io, socket) {
     socket.join(`conversation:${conversationId}`);
   });
 
-
-
-  // ============================
-  // SEND MESSAGE + REPLY
-  // ============================
   socket.on("send_message", async ({ conversationId, content, replyTo }) => {
     const userId = socket.user.id;
 
@@ -41,13 +32,19 @@ module.exports = function (io, socket) {
     });
 
     io.to(`conversation:${conversationId}`).emit("new_message", message);
+
+    // Emit BACKGROUND alert to ALL members (including unopened chats)
+    const members = await ConversationService.getConversationMembers(conversationId);
+
+    const userRooms = members.map(m => `user:${m.id}`);
+
+    io.to(userRooms).emit("background_message", {
+      conversationId,
+      messageId: message._id,
+      senderId: userId
+    });
   });
 
-
-
-  // ============================
-  // EDIT MESSAGE
-  // ============================
   socket.on("edit_message", async ({ messageId, content }) => {
     const userId = socket.user.id;
 
@@ -65,11 +62,6 @@ module.exports = function (io, socket) {
     io.to(`conversation:${msg.conversationId}`).emit("message_edited", msg);
   });
 
-
-
-  // ============================
-  // DELETE MESSAGE
-  // ============================
   socket.on("delete_message", async ({ messageId }) => {
     const userId = socket.user.id;
 
@@ -83,11 +75,6 @@ module.exports = function (io, socket) {
     io.to(`conversation:${msg.conversationId}`).emit("message_deleted", msg);
   });
 
-
-
-  // ============================
-  // REACT TO MESSAGE
-  // ============================
   socket.on("react_message", async ({ messageId, emoji }) => {
     const userId = socket.user.id;
 
@@ -100,14 +87,9 @@ module.exports = function (io, socket) {
     io.to(`conversation:${msg.conversationId}`).emit("message_reacted", msg);
   });
 
-
-
-  // ============================
-  // MARK AS READ
-  // ============================
   socket.on("mark_read", async ({ conversationId, lastMessageId }) => {
     const userId = socket.user.id;
-
+    
     await MessageService.markAsRead({
       conversationId,
       userId,
@@ -120,11 +102,6 @@ module.exports = function (io, socket) {
     });
   });
 
-
-
-  // ============================
-  // TYPING INDICATOR
-  // ============================
   socket.on("typing", ({ conversationId }) => {
     socket.to(`conversation:${conversationId}`).emit("typing", {
       userId: socket.user.id,
