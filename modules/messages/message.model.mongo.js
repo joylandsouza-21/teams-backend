@@ -13,6 +13,21 @@ const MessageSchema = new mongoose.Schema({
     index: true,
   },
 
+  sender: {
+    id: {
+      type: Number,
+      required: true,
+    },
+    name: {
+      type: String,
+      required: true,
+    },
+    profile_pic: {
+      type: String,
+      default: null,
+    },
+  },
+
   content: {
     type: String,
     default: "",

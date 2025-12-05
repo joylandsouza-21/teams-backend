@@ -1,6 +1,7 @@
 const sanitize = require("../utils/sanitize");
 const MessageService = require("../modules/messages/message.service");
 const ConversationService = require("../modules/conversations/conversation.service");
+const User = require("../modules/users/user.model.pg");
 
 module.exports = function (io, socket) {
 
@@ -14,15 +15,25 @@ module.exports = function (io, socket) {
     socket.join(`conversation:${conversationId}`);
   });
 
-  socket.on("send_message", async ({ conversationId, content, replyTo }) => {
+  socket.on("leave_conversation", ({ conversationId }) => {
+    socket.leave(`conversation:${conversationId}`);
+  });
+
+  socket.on("send_message", async ({ conversationId, content, replyTo, attachments }) => {
     const userId = socket.user.id;
+
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "name", "profile_pic"]
+    });
+
+    if (!user) throw new Error("Sender not found");
 
     if (!await ConversationService.isMember(userId, conversationId)) {
       return socket.emit("error", "UNAUTHORIZED");
     }
 
     const clean = sanitize(content);
-    if (!clean.trim()) return;
+    // if (!clean.trim()) return;
 
     let replyPreview = null;
     if (replyTo) {
@@ -32,9 +43,15 @@ module.exports = function (io, socket) {
     const message = await MessageService.sendMessage({
       conversationId,
       senderId: userId,
+      sender: {
+        id: user.id,
+        name: user.name,
+        profile_pic: user.profile_pic
+      },
       content: clean,
       replyPreview,
-      replyTo: replyTo || null,
+      replyTo: replyTo,
+      attachments,
     });
 
     io.to(`conversation:${conversationId}`).emit("new_message", message);

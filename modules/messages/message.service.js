@@ -35,10 +35,11 @@ module.exports = {
   // ======================================
   // SEND MESSAGE (supports reply + attachments)
   // ======================================
-  async sendMessage({ conversationId, senderId, content, replyPreview, replyTo, attachments = [] }) {
+  async sendMessage({ conversationId, senderId, sender, content, replyPreview = null, replyTo=null, attachments = [] }) {
     const msg = await Message.create({
       conversationId,
       senderId,
+      sender,
       content,
       replyPreview,
       replyTo: replyTo || null,

@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 
 const socketRateLimit = require("../middleware/socketRateLimit");
 const userSocket = require("./user.socket");
+const presenceSocket = require("./presence.socket");
 
 let ioInstance;
 
@@ -52,6 +53,8 @@ module.exports = function (server) {
     chatSocket(io, socket);
 
     userSocket(io, socket);
+
+    presenceSocket(io, socket);
 
     socket.on("disconnect", () => {
       console.log("Socket disconnected:", socket.user.id);
