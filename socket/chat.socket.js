@@ -24,10 +24,16 @@ module.exports = function (io, socket) {
     const clean = sanitize(content);
     if (!clean.trim()) return;
 
+    let replyPreview = null;
+    if (replyTo) {
+      replyPreview = await MessageService.getMessagePreview(replyTo)
+    }
+
     const message = await MessageService.sendMessage({
       conversationId,
       senderId: userId,
       content: clean,
+      replyPreview,
       replyTo: replyTo || null,
     });
 
@@ -89,7 +95,7 @@ module.exports = function (io, socket) {
 
   socket.on("mark_read", async ({ conversationId, lastMessageId }) => {
     const userId = socket.user.id;
-    
+
     await MessageService.markAsRead({
       conversationId,
       userId,

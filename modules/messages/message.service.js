@@ -35,11 +35,12 @@ module.exports = {
   // ======================================
   // SEND MESSAGE (supports reply + attachments)
   // ======================================
-  async sendMessage({ conversationId, senderId, content, replyTo, attachments = [] }) {
+  async sendMessage({ conversationId, senderId, content, replyPreview, replyTo, attachments = [] }) {
     const msg = await Message.create({
       conversationId,
       senderId,
       content,
+      replyPreview,
       replyTo: replyTo || null,
       attachments,
     });
@@ -132,5 +133,23 @@ module.exports = {
 
     return { success: true };
   },
+
+  async getMessagePreview(replyTo) {
+    const parentMsg = await Message.findById(replyTo)
+      .select("content senderId")
+      .lean();
+
+    if (parentMsg) {
+      return {
+        content: parentMsg.content,
+        senderId: parentMsg.senderId
+      };
+    } else {
+      return {
+        content: "Original message deleted",
+        senderId: null
+      };
+    }
+  }
 
 };

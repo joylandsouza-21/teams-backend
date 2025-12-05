@@ -29,6 +29,17 @@ const MessageSchema = new mongoose.Schema({
     default: null,
   },
 
+  replyPreview: {
+    content: {
+      type: String,
+      default: null,
+    },
+    senderId: {
+      type: Number,
+      default: null,
+    },
+  },
+
   // Reactions: like :thumbsup:, :heart:
   reactions: {
     type: Map,
