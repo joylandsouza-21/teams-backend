@@ -1,141 +1,183 @@
-const presenceStore = require("../presence/presence.store");
+const ConversationService = require("../modules/conversations/conversation.service");
+const { userGroupRooms } = require("../store/presence.groups");
+const presenceMap = require("../store/presence.store");
+
+// ✅ Multi-tab socket counter
+const socketCountMap = new Map();
+// ✅ Track which group rooms user belongs to
 
 module.exports = function presenceSocket(io, socket) {
   const userId = socket.user.id;
 
-  // ✅ When user connects
-  const previous = presenceStore.get(userId);
+  // ===============================
+  // ✅ USER CONNECTED (MULTI TAB SAFE)
+  // ===============================
+  const current = socketCountMap.get(userId) || 0;
+  socketCountMap.set(userId, current + 1);
 
-  presenceStore.set(userId, {
-    status: previous?.isManual ? previous.status : "online",
-    isManual: previous?.isManual || false,
-    lastActiveAt: Date.now(),
-    socketId: socket.id,
-    inCall: false
+  presenceMap.set(userId, {
+    status: "online",
+    lastActive: Date.now(),
+    manual: false,
   });
 
-  socket.join(`user:${userId}`);
+  // ✅ join own direct presence room
+  socket.join(`presence:user:${userId}`);
 
-  io.emit("presence_update", {
-    userId,
-    status: presenceStore.get(userId).status,
-    inCall: false
-  });
-
-  console.log("✅ Presence Connected:", userId);
-
+  emitPresence(userId);
 
   // ===============================
-  // ✅ AUTO ACTIVITY (mousemove, typing)
+  // ✅ SUBSCRIBE TO DIRECT PRESENCE
+  // ===============================
+  socket.on("subscribe_presence", ({ userId }) => {
+    socket.join(`presence:user:${userId}`);
+
+    const data = presenceMap.get(userId);
+    socket.emit("presence_update", {
+      userId,
+      status: data?.status || "offline",
+      lastActive: data?.lastActive || null,
+    });
+  });
+
+  // ✅ BULK DIRECT
+  socket.on("subscribe_presence_bulk", ({ userIds }) => {
+    if (!Array.isArray(userIds)) return;
+
+    userIds.forEach((uid) => {
+      socket.join(`presence:user:${uid}`);
+
+      const data = presenceMap.get(uid);
+      socket.emit("presence_update", {
+        userId: uid,
+        status: data?.status || "offline",
+        lastActive: data?.lastActive || null,
+      });
+    });
+  });
+
+  // ===============================
+  // ✅ SUBSCRIBE TO GROUP PRESENCE
+  // ===============================
+  socket.on("subscribe_group_presence", async ({ conversationId }) => {
+    socket.join(`presence:conversation:${conversationId}`);
+
+    const members = await ConversationService.getConversationMembers(conversationId);
+
+    // Track user → groups
+    if (!userGroupRooms.has(userId)) {
+      userGroupRooms.set(userId, new Set());
+    }
+    userGroupRooms.get(userId).add(conversationId);
+
+    // ✅ send snapshot for all members
+    for (const user of members) {
+      const uid = user.id;
+      const data = presenceMap.get(uid);
+
+      socket.emit("presence_update", {
+        userId: uid,
+        status: data?.status || "offline",
+        lastActive: data?.lastActive || null,
+      });
+    }
+  });
+
+  socket.on("unsubscribe_group_presence", ({ conversationId }) => {
+    socket.leave(`presence:conversation:${conversationId}`);
+
+    const set = userGroupRooms.get(userId);
+    if (set) set.delete(conversationId);
+  });
+
+  // ===============================
+  // ✅ AUTO ACTIVITY
   // ===============================
   socket.on("user_active", () => {
-    const user = presenceStore.get(userId);
-    if (!user) return;
+    const data = presenceMap.get(userId);
+    if (data?.manual) return;
+    updateStatus(userId, "online", false);
+  });
 
-    if (!user.isManual) {
-      user.status = "online";
+  // ===============================
+  // ✅ MANUAL STATUS
+  // ===============================
+  socket.on("set_manual_status", ({ status }) => {
+    if (status === "online") {
+      updateStatus(userId, "online", false);
+    } else {
+      updateStatus(userId, status, true);
     }
-
-    user.lastActiveAt = Date.now();
-
-    io.emit("presence_update", {
-      userId,
-      status: user.status,
-      inCall: user.inCall
-    });
   });
-
-
-  // ===============================
-  // ✅ MANUAL STATUS OVERRIDE
-  // ===============================
-  socket.on("set_manual_status", (status) => {
-    const user = presenceStore.get(userId);
-    if (!user) return;
-
-    user.status = status;       // away | busy | online
-    user.isManual = true;
-
-    io.emit("presence_update", {
-      userId,
-      status: user.status,
-      inCall: user.inCall
-    });
-  });
-
-
-  // ===============================
-  // ✅ CLEAR MANUAL (BACK TO AUTO)
-  // ===============================
-  socket.on("clear_manual_status", () => {
-    const user = presenceStore.get(userId);
-    if (!user) return;
-
-    user.isManual = false;
-    user.status = "online";
-
-    io.emit("presence_update", {
-      userId,
-      status: "online",
-      inCall: user.inCall
-    });
-  });
-
 
   // ===============================
   // ✅ CALL STATUS
   // ===============================
-  socket.on("call_start", () => {
-    const user = presenceStore.get(userId);
-    if (!user) return;
-
-    user.inCall = true;
-    user.status = "busy";
-
-    io.emit("presence_update", {
-      userId,
-      status: "busy",
-      inCall: true
-    });
+  socket.on("call_started", () => {
+    updateStatus(userId, "on_call", true);
   });
 
-  socket.on("call_end", () => {
-    const user = presenceStore.get(userId);
-    if (!user) return;
-
-    user.inCall = false;
-
-    if (!user.isManual) {
-      user.status = "online";
-    }
-
-    io.emit("presence_update", {
-      userId,
-      status: user.status,
-      inCall: false
-    });
+  socket.on("call_ended", () => {
+    updateStatus(userId, "online", false);
   });
-
 
   // ===============================
-  // ✅ DISCONNECT
+  // ✅ DISCONNECT (MULTI TAB SAFE)
   // ===============================
   socket.on("disconnect", () => {
-    const user = presenceStore.get(userId);
+    const current = socketCountMap.get(userId) || 1;
+    const remaining = current - 1;
 
-    if (!user) return;
+    if (remaining <= 0) {
+      socketCountMap.delete(userId);
 
-    // Remove only if same socket (multi-tab safe)
-    if (user.socketId === socket.id) {
-      presenceStore.delete(userId);
-
-      io.emit("presence_update", {
-        userId,
-        status: "offline",
-        inCall: false
-      });
+      const data = presenceMap.get(userId);
+      if (!data?.manual) {
+        updateStatus(userId, "offline", false);
+      }
+    } else {
+      socketCountMap.set(userId, remaining);
     }
-
-    console.log("❌ Presence Disconnected:", userId);
   });
+
+  // ===============================
+  // ✅ HELPERS
+  // ===============================
+  function updateStatus(userId, status, manual = false) {
+    const prev = presenceMap.get(userId);
+
+    presenceMap.set(userId, {
+      status,
+      lastActive: Date.now(),
+      manual,
+    });
+
+    if (!prev || prev.status !== status) {
+      emitPresence(userId);
+    }
+  }
+
+  function emitPresence(userId) {
+    const data = presenceMap.get(userId);
+
+    // ✅ DIRECT EMIT
+    io.to(`presence:user:${userId}`).emit("presence_update", {
+      userId,
+      status: data.status,
+      lastActive: data.lastActive,
+    });
+
+    // ✅ GROUP EMIT (ONLY GROUPS USER BELONGS TO)
+    const groups = userGroupRooms.get(userId);
+
+    if (groups) {
+      for (const convoId of groups) {
+        io.to(`presence:conversation:${convoId}`).emit("presence_update", {
+          userId,
+          status: data.status,
+          lastActive: data.lastActive,
+        });
+      }
+    }
+  }
 };
