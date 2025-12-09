@@ -62,6 +62,43 @@ module.exports = {
       attributes: ["id", "name", "email", "role", "profile_pic"],
       order: [["name", "ASC"]],
     });
+  },
+
+  async updateUser(userId, body = {}, file) {
+    try {
+      const { name, profile_pic, remove_photo } = body;
+
+      const user = await User.findByPk(userId);
+      if (!user) throw new Error("User not found");
+
+      if (name !== undefined) {
+        user.name = name;
+      }
+
+      if (remove_photo === "true") {
+        user.profile_pic = null;
+      }
+
+      if (profile_pic === null) {
+        user.profile_pic = null;
+      }
+
+      if (file) {
+        user.profile_pic = `/uploads/${file.filename}`;
+      }
+
+      await user.save();
+
+      return {
+        message: "Profile updated successfully",
+        user,
+      };
+
+    } catch (err) {
+      throw new Error(err.message);
+    }
   }
+
+
 
 };

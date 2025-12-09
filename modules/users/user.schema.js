@@ -11,4 +11,22 @@ const loginUserSchema = z.object({
   password: z.string(),
 });
 
-module.exports = { createUserSchema, loginUserSchema };
+
+const updateUserSchema = z.object({
+  name: z.string().min(1, "Name cannot be empty").optional(),
+
+  profile_pic: z
+    .any()
+    .refine(
+      (file) =>
+        file === null ||
+        typeof file === "object" ||
+        typeof file === "string",
+      "Invalid profile picture format"
+    )
+    .optional(),
+});
+
+
+
+module.exports = { createUserSchema, loginUserSchema, updateUserSchema };

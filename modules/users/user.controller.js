@@ -1,5 +1,5 @@
 const { ZodError } = require("zod");
-const { createUserSchema, loginUserSchema } = require("./user.schema");
+const { createUserSchema, loginUserSchema, updateUserSchema } = require("./user.schema");
 const UserService = require("./user.service");
 
 module.exports = {
@@ -25,12 +25,22 @@ module.exports = {
     }
   },
 
-  async getAllUsers(req, res){
-    try{
+  async getAllUsers(req, res) {
+    try {
       const result = await UserService.getAllUsers()
       return res.json(result);
     } catch (err) {
       return res.status(400).json({ error: err.message });
     }
+  },
+
+  async updateUser(req, res) {
+    try {
+      const result = await UserService.updateUser(req.user.id, req.body, req.file );
+      return res.json(result);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
   }
+
 };
