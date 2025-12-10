@@ -16,12 +16,12 @@ module.exports = {
             const conversation = await ConversationService.createOrFindDirect(user1Id, user2Id);
 
             const io = getIO();
-            io.to(`user:${user1Id}`).emit("refresh_chat", {
-                conversationId: conversation.id,
+            io.to(`user:${user1Id}`).emit("chat_update", {
+                chat: conversation,
             });
 
-            io.to(`user:${user2Id}`).emit("refresh_chat", {
-                conversationId: conversation.id,
+            io.to(`user:${user2Id}`).emit("chat_update", {
+                chat: conversation,
             });
 
             return res.json({
@@ -33,9 +33,6 @@ module.exports = {
         }
     },
 
-    // ===========================
-    // GROUP CHAT
-    // ===========================
     async createGroup(req, res) {
         try {
             const creatorId = req.user.id;
@@ -49,11 +46,12 @@ module.exports = {
 
             const io = getIO();
 
-            for (const userId of members) {
-                io.to(`user:${userId}`).emit("refresh_chat", {
-                    conversationId: conversation.id,
-                });
-            }
+            const uniqueMembers = Array.from(new Set([creatorId, ...members]));
+            const userRooms = uniqueMembers.map(id => `user:${id}`);
+
+            io.to(userRooms).emit("chat_update", {
+                chat: conversation,
+            });
 
             return res.json({
                 conversationId: conversation.id
@@ -78,7 +76,12 @@ module.exports = {
             });
 
             const io = getIO();
-            io.to(`conversation:${conversationId}`).emit("group_converted", { conversationId });
+
+            const userRooms = convo?.members?.map(m => `user:${m.id}`);
+            
+            io.to(userRooms).emit("chat_update", {
+                chat: convo,
+            });
 
             return res.json({ conversationId: convo.id });
 
@@ -93,20 +96,18 @@ module.exports = {
             const { members } = req.body;
             const userId = req.user.id;
 
-            await ConversationService.addMembers({
+            const result = await ConversationService.addMembers({
                 conversationId,
                 members,
                 userId,
             });
 
-            // ✅ 2. Emit real-time update
             const io = getIO();
 
-            members.forEach((userId) => {
-                io.to(`conversation:${conversationId}`).emit("member_added", {
-                    userId,
-                    conversationId,
-                });
+            const userRooms = result?.members?.map(m => `user:${m.id}`);
+            
+            io.to(userRooms).emit("chat_update", {
+                chat: result,
             });
 
             res.json({ success: true });
@@ -173,16 +174,16 @@ module.exports = {
     async updateConversation(req, res) {
         try {
             const { conversationId } = req.params;
-            const { name } = req.body;
-            const result = await ConversationService.updateConversationService({ conversationId, name })
+            const { name, remove_photo } = req.body;
+            const result = await ConversationService.updateConversationService({ conversationId, name, file: req.file, remove_photo })
 
             const members = await ConversationService.getConversationMembers(conversationId)
 
             const userRooms = members.map(m => `user:${m.id}`);
-            
+
             const io = getIO();
-            io.to(userRooms).emit("refresh_chat", {
-                conversationId: conversationId,
+            io.to(userRooms).emit("chat_update", {
+                chat: result,
             });
 
             return res.status(200).json({

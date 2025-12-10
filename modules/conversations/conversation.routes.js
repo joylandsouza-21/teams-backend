@@ -12,6 +12,7 @@ const {
     removeMemberParamsSchema,
     updateConversationSchema,
 } = require("./conversation.schema");
+const upload = require("../../middleware/upload");
 
 router.get(
     "/",
@@ -64,7 +65,8 @@ router.delete(
 router.post(
     "/:conversationId/update",
     auth,
-    validate(updateConversationSchema),
+    // validate(updateConversationSchema),
+    upload.single("image"),
     ConversationController.updateConversation
 );
 

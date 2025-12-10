@@ -27,6 +27,8 @@ const PORT = process.env.PORT || 9080;
     await sequelize.authenticate();
     console.log("✓ PostgreSQL Connected");
 
+    // await sequelize.sync({ alter: true });
+
     // Start server
     server.listen(PORT, () =>
       console.log(`🚀 Server running on ${PORT}`)

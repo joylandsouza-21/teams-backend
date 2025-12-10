@@ -25,6 +25,7 @@ module.exports = {
         email: user.email,
         name: user.name,
         role: user.role,
+        profile_pic: user.profile_pic,
         auth_provider: user.auth_provider,
       },
     };
@@ -52,6 +53,7 @@ module.exports = {
         email: user.email,
         name: user.name,
         role: user.role,
+        profile_pic: user.profile_pic,
         auth_provider: user.auth_provider,
       },
     };
