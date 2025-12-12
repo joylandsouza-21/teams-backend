@@ -1,5 +1,6 @@
 const ConversationService = require("./conversation.service");
 const { getIO } = require("../../socket");
+const ConversationMember = require("./conversationMember.model.pg");
 
 module.exports = {
 
@@ -78,7 +79,7 @@ module.exports = {
             const io = getIO();
 
             const userRooms = convo?.members?.map(m => `user:${m.id}`);
-            
+
             io.to(userRooms).emit("chat_update", {
                 chat: convo,
             });
@@ -105,7 +106,7 @@ module.exports = {
             const io = getIO();
 
             const userRooms = result?.members?.map(m => `user:${m.id}`);
-            
+
             io.to(userRooms).emit("chat_update", {
                 chat: result,
             });
@@ -122,15 +123,41 @@ module.exports = {
             const { conversationId, userId } = req.params;
             const adminId = req.user.id;
 
-            await ConversationService.removeMember({
+            const isSelfLeave = Number(adminId) === Number(userId);
+
+            let isAdmin = null;
+
+            if (!isSelfLeave) {
+                isAdmin = await ConversationMember.findOne({
+                    where: {
+                        conversationId,
+                        userId: adminId,
+                        role: "admin"
+                    }
+                });
+
+                if (!isAdmin) {
+                    return res.status(403).json({
+                        error: "Only admin can remove other members"
+                    });
+                }
+            }
+
+            const conv = await ConversationService.removeMember({
                 conversationId,
                 userId,
                 adminId,
             });
 
             const io = getIO();
-            io.to(`conversation:${conversationId}`).emit("member_removed", { userId });
 
+            const userRooms = conv?.members?.map(m => `user:${m.id}`);
+
+            io.to(userRooms).emit("chat_update", {
+                chat: conv,
+            });
+
+            io.to(`user:${userId}`).emit("chat_removed", { conversationId });
 
             res.json({ success: true });
 

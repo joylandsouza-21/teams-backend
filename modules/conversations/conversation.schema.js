@@ -46,11 +46,6 @@ const addMembersSchema = z.object({
         .min(1, "At least one member is required"),
 });
 
-const removeMemberParamsSchema = z.object({
-    conversationId: z.coerce.number().int().positive(),
-    userId: z.coerce.number().int().positive(),
-});
-
 const updateConversationSchema = z.object({
     name: z.string()
         .optional()
@@ -65,6 +60,5 @@ module.exports = {
     createChannelConversationSchema,
     convertToGroupSchema,
     addMembersSchema,
-    removeMemberParamsSchema,
     updateConversationSchema
 };

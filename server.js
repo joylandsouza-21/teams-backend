@@ -30,7 +30,7 @@ const PORT = process.env.PORT || 9080;
     // await sequelize.sync({ alter: true });
 
     // Start server
-    server.listen(PORT, () =>
+    server.listen(PORT,  "0.0.0.0", () =>
       console.log(`🚀 Server running on ${PORT}`)
     );
 

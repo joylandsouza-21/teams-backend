@@ -31,9 +31,8 @@ app.use("/api/auth", require("./modules/users/user.routes"));
 app.use("/api/messages", require("./modules/messages/message.routes"));
 app.use("/api/conversations", require("./modules/conversations/conversation.routes"));
 app.use("/api/files", require("./modules/uploads/upload.route"));
-app.use(
-  "/api/uploads",
-  express.static(path.join(__dirname, "../uploads"))
-);
+app.use("/api/calls",  require("./modules/calls/call.routes"));
+app.use("/api/push", require("./modules/push/push.routes"));
+app.use("/api/uploads", express.static(path.join(__dirname, "../uploads")));
 
 module.exports = app;

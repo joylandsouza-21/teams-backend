@@ -9,8 +9,6 @@ const {
     createChannelConversationSchema,
     convertToGroupSchema,
     addMembersSchema,
-    removeMemberParamsSchema,
-    updateConversationSchema,
 } = require("./conversation.schema");
 const upload = require("../../middleware/upload");
 
@@ -58,7 +56,6 @@ router.post(
 router.delete(
     "/:conversationId/members/:userId",
     auth,
-    validate(removeMemberParamsSchema, "params"),
     ConversationController.removeMember
 );
 

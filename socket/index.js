@@ -6,13 +6,14 @@ const socketRateLimit = require("../middleware/socketRateLimit");
 const userSocket = require("./user.socket");
 const presenceSocket = require("./presence.socket");
 const initPresenceTimer = require("./presence.timer");
+const callSocket = require("./call.socket");
 
 let ioInstance;
 
 module.exports = function (server) {
   const io = new Server(server, {
     cors: {
-      origin: "http://localhost:5173",
+      origin: "*",
       methods: ["GET", "POST"],
       credentials: true
     }
@@ -56,6 +57,8 @@ module.exports = function (server) {
     userSocket(io, socket);
 
     presenceSocket(io, socket);
+
+    callSocket(io, socket);
 
     socket.on("disconnect", () => {
       console.log("Socket disconnected:", socket.user.id);

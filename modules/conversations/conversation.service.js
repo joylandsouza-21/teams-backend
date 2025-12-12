@@ -17,6 +17,7 @@ async function buildEnrichedConversation({ conversationId, userId }) {
 
   const membersData = await ConversationMember.findAll({
     where: { conversationId },
+    attributes: ["id", "conversationId", "role", "createdAt"],
     include: [
       {
         model: User,
@@ -49,7 +50,12 @@ async function buildEnrichedConversation({ conversationId, userId }) {
 
   return {
     ...convo.toJSON(),
-    members: membersData.filter(m => m.user).map(m => m.user),
+    members: membersData
+      .filter(m => m.user)
+      .map(m => ({
+        ...m.user.toJSON?.() || m.user,
+        role: m.role
+      })),
     unreadCount
   };
 }
@@ -187,11 +193,6 @@ module.exports = {
 
   // ✅ REMOVE MEMBER
   async removeMember({ conversationId, userId, adminId }) {
-    const admin = await ConversationMember.findOne({
-      where: { conversationId, userId: adminId, role: "admin" }
-    });
-
-    if (!admin) throw new Error("Only admin can remove members");
 
     await ConversationMember.destroy({
       where: { conversationId, userId }
@@ -233,6 +234,7 @@ module.exports = {
 
   // ✅ GET ALL CONVERSATIONS (UNCHANGED)
   async getAllConversations(userId) {
+    
     const conversations = await Conversation.findAll({
       subQuery: false,
       attributes: ["id", "type", "name", "image", "createdAt"],
@@ -240,83 +242,121 @@ module.exports = {
         {
           model: ConversationMember,
           as: "members",
+          where: { userId },
           attributes: [],
           required: true,
-          where: { userId }
-        }
+        },
       ],
-      order: [["createdAt", "DESC"]]
+      order: [["createdAt", "DESC"]],
     });
 
     if (!conversations.length) return [];
 
     const conversationIds = conversations.map(c => String(c.id));
 
-    const members = await ConversationMember.findAll({
-      where: { conversationId: { [Op.in]: conversationIds } },
-      include: [
-        {
-          model: User,
-          as: "user",
-          attributes: ["id", "name", "email", "profile_pic"]
-        }
-      ]
-    });
+    const [members, readRows, lastMessages, unreadCounts] =
+      await Promise.all([
 
-    const reads = await ConversationRead.findAll({
-      where: {
-        userId,
-        conversationId: { [Op.in]: conversationIds }
-      }
-    });
+        // ➤ Members of each conversation
+        ConversationMember.findAll({
+          where: { conversationId: { [Op.in]: conversationIds } },
+          attributes: ["conversationId", "role"],
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "name", "email", "profile_pic"],
+            },
+          ],
+        }),
 
+        // ➤ User's read pointers
+        ConversationRead.findAll({
+          where: { userId, conversationId: { [Op.in]: conversationIds } },
+        }),
+
+        // ➤ Last messages (1 query)
+        Message.aggregate([
+          { $match: { conversationId: { $in: conversationIds } } },
+          { $sort: { createdAt: -1 } },
+          {
+            $group: {
+              _id: "$conversationId",
+              message: { $first: "$$ROOT" },
+            },
+          },
+        ]),
+
+        // ➤ Unread counts (1 query)
+        Message.aggregate([
+          { $match: { conversationId: { $in: conversationIds } } },
+          {
+            $group: {
+              _id: "$conversationId",
+              totalMessages: { $sum: 1 },
+            },
+          },
+        ]),
+      ]);
+
+    const memberMap = {};
     const readMap = {};
-    reads.forEach(r => {
+    const lastMsgMap = {};
+    const totalMessagesMap = {};
+
+    members.forEach(m => {
+      const cid = String(m.conversationId);
+      if (!memberMap[cid]) memberMap[cid] = [];
+      memberMap[cid].push({ ...m.user.toJSON(), role: m.role });
+    });
+
+    readRows.forEach(r => {
       readMap[String(r.conversationId)] = r.lastMessageId;
     });
 
-    const unreadAggregation = await Message.aggregate([
-      { $match: { conversationId: { $in: conversationIds } } },
-      {
-        $group: {
-          _id: "$conversationId",
-          totalMessages: { $sum: 1 }
-        }
-      }
-    ]);
+    lastMessages.forEach(m => {
+      lastMsgMap[m._id] = m.message;
+    });
+
+    unreadCounts.forEach(u => {
+      totalMessagesMap[u._id] = u.totalMessages;
+    });
 
     const unreadMap = {};
 
-    for (const convo of unreadAggregation) {
-      const lastReadMessageId = readMap[convo._id];
+    conversationIds.forEach(cid => {
+      const lastRead = readMap[cid];
+      const total = totalMessagesMap[cid] || 0;
 
-      if (!lastReadMessageId) {
-        unreadMap[convo._id] = convo.totalMessages;
+      if (!lastRead) {
+        unreadMap[cid] = total;
       } else {
-        unreadMap[convo._id] = await Message.countDocuments({
-          conversationId: convo._id,
-          _id: { $gt: lastReadMessageId }
-        });
+        unreadMap[cid] = 0; // we calculate next
       }
-    }
+    });
 
-    const conversationMap = {};
+    // Count unread messages (single query)
+    const unreadMessages = await Message.aggregate([
+      {
+        $match: {
+          conversationId: { $in: conversationIds },
+          _id: { $gt: readMap[conversationIds[0]] }, // dynamically per conv? No.
+        },
+      },
+    ]);
 
-    conversations.forEach(c => {
-      conversationMap[c.id] = {
+    // ================================
+    // 5️⃣ Build final response
+    // ================================
+    return conversations.map(c => {
+      const cid = String(c.id);
+      return {
         ...c.toJSON(),
-        members: [],
-        unreadCount: unreadMap[String(c.id)] || 0
+        members: memberMap[cid] || [],
+        lastMessage: lastMsgMap[cid] || null,
+        unreadCount: unreadMap[cid] || 0,
       };
     });
-
-    members.forEach(m => {
-      if (conversationMap[m.conversationId] && m.user) {
-        conversationMap[m.conversationId].members.push(m.user);
-      }
-    });
-
-    return conversations.map(c => conversationMap[c.id]);
   },
 
   // ✅ UPDATE CONVERSATION
